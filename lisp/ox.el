@@ -4753,25 +4753,36 @@ downloaded copy.  Otherwise, return unchanged LINK."
 ;; `org-export-get-ordinal' associates a sequence number to any object
 ;; or element.
 
-(defun org-export-new-reference (references)
+(defun org-export-new-reference (references &optional datum)
   "Return a unique reference, among REFERENCES.
 REFERENCES is an alist whose values are in-use references, as
-numbers.  Returns a number, which is the internal representation
-of a reference.  See also `org-export-format-reference'."
-  ;; Generate random 7 digits hexadecimal numbers.  Collisions
-  ;; increase exponentially with the numbers of references.  However,
-  ;; the odds for encountering at least one collision with 1000 active
-  ;; references in the same document are roughly 0.2%, so this
-  ;; shouldn't be the bottleneck.
-  (let ((new (random #x10000000)))
-    (while (rassq new references) (setq new (random #x10000000)))
-    new))
+numbers or strings based on the `raw-value' property.  Return
+a number or string.  See also `org-export-format-reference'."
+  (if-let* ((ref (org-element-property :raw-value datum)))
+      (progn
+        (while-let ((_(rassoc ref references))
+                    (_(setq datum (org-element-property :parent datum)))
+                    (parent-ref (org-element-property :raw-value datum)))
+          (setq ref (concat parent-ref "--" ref)))
+        (while (rassoc ref references)
+          (setq ref (concat ref "I")))
+        ref)
+    ;; Generate random 7 digits hexadecimal numbers.  Collisions
+    ;; increase exponentially with the numbers of references.  However,
+    ;; the odds for encountering at least one collision with 1000 active
+    ;; references in the same document are roughly 0.2%, so this
+    ;; shouldn't be the bottleneck.
+    (let ((new (random #x10000000)))
+      (while (rassq new references) (setq new (random #x10000000)))
+      new)))
 
 (defun org-export-format-reference (reference)
   "Format REFERENCE into a string.
-REFERENCE is a number representing a reference, as returned by
-`org-export-new-reference', which see."
-  (format "org%07x" reference))
+REFERENCE is a number or string representing a reference,
+as returned by `org-export-new-reference', which see."
+  (if (numberp reference)
+      (format "org%07x" reference)
+    (url-hexify-string reference)))
 
 (defun org-export-get-reference (datum info)
   "Return a unique reference for DATUM, as a string.
@@ -4816,7 +4827,7 @@ matching DATUM before creating a new reference."
 			       (let ((old (org-export-format-reference stored)))
 				 (and (not (assoc old cache)) stored)))))
 			 cells)
-			(org-export-new-reference cache)))
+			(org-export-new-reference cache datum)))
 	       (reference-string (org-export-format-reference new)))
 	  ;; Cache contains both data already associated to
 	  ;; a reference and in-use internal references, so as to make
